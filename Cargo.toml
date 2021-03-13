@@ -1,0 +1,13 @@
+[package]
+name = "df_social_schedule"
+version = "0.1.0"
+authors = ["Alex Williams <mkb2191@protonmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+
+[profile.release]
+debug = true
