@@ -29,187 +29,56 @@ pub trait Word:
     fn trailing_zeros(self) -> u32;
 }
 
-impl Word for u8 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
+macro_rules! derive_word {
+    ($x: ty) => {
+        impl Word for $x {
+            const ZERO: Self = 0;
+            const ONE: Self = 1;
+            const MAX: Self = Self::MAX;
+            #[inline(always)]
+            fn count_ones(self) -> u32 {
+                self.count_ones()
+            }
+            #[inline(always)]
+            fn count_zeros(self) -> u32 {
+                self.count_zeros()
+            }
+            #[inline(always)]
+            fn leading_ones(self) -> u32 {
+                self.leading_ones()
+            }
+            #[inline(always)]
+            fn leading_zeros(self) -> u32 {
+                self.leading_zeros()
+            }
+            #[inline(always)]
+            fn trailing_ones(self) -> u32 {
+                self.trailing_ones()
+            }
+            #[inline(always)]
+            fn trailing_zeros(self) -> u32 {
+                self.trailing_zeros()
+            }
+        }
+    };
 }
-impl Word for u16 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
-}
-impl Word for u32 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
-}
-impl Word for u64 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
-}
-impl Word for u128 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
-}
-impl Word for usize {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX: Self = Self::MAX;
-    #[inline(always)]
-    fn count_ones(self) -> u32 {
-        self.count_ones()
-    }
-    #[inline(always)]
-    fn count_zeros(self) -> u32 {
-        self.count_zeros()
-    }
-    #[inline(always)]
-    fn leading_ones(self) -> u32 {
-        self.leading_ones()
-    }
-    #[inline(always)]
-    fn leading_zeros(self) -> u32 {
-        self.leading_zeros()
-    }
-    #[inline(always)]
-    fn trailing_ones(self) -> u32 {
-        self.trailing_ones()
-    }
-    #[inline(always)]
-    fn trailing_zeros(self) -> u32 {
-        self.trailing_zeros()
-    }
-}
+
+derive_word!(u8);
+derive_word!(u16);
+derive_word!(u32);
+derive_word!(u64);
+derive_word!(u128);
+derive_word!(usize);
+
+
+
 
 #[derive(Debug)]
 pub struct DFScheduler<T>
 where
     T: Word,
 {
-    groups: Box<[usize]>,
+    groups: Box<[std::num::NonZeroUsize]>,
     player_count: usize,
     player_bit_word_count: usize,
     players_played_with: Box<[T]>,
@@ -227,8 +96,8 @@ where
 }
 
 impl<T: Word> DFScheduler<T> {
-    pub fn new(groups: &[usize]) -> Self {
-        let player_count = groups.iter().sum();
+    pub fn new(groups: &[std::num::NonZeroUsize]) -> Self {
+        let player_count = groups.iter().map(|x| x.get()).sum();
         let player_bit_word_count = player_count / T::SIZE + (player_count % T::SIZE != 0) as usize;
         let players_played_with =
             vec![T::ZERO; player_bit_word_count * player_count].into_boxed_slice();
@@ -263,7 +132,7 @@ impl<T: Word> DFScheduler<T> {
         let mut table_vec = Vec::new();
         for player in self.schedule.iter() {
             table_vec.push(player);
-            if table_vec.len() >= self.groups[round_vec.len()] {
+            if table_vec.len() >= self.groups[round_vec.len()].get() {
                 round_vec.push(table_vec);
                 table_vec = Vec::new();
                 if round_vec.len() >= self.groups.len() {
@@ -318,7 +187,7 @@ impl<T: Word> DFScheduler<T> {
                 self.schedule.push(player);
 
                 self.current_position_in_table += 1;
-                if self.current_position_in_table >= self.groups[self.current_table] {
+                if self.current_position_in_table >= self.groups[self.current_table].get() {
                     let round_offset = self.current_round * self.player_bit_word_count;
                     let table_offset = self.current_table * self.player_bit_word_count;
                     for (i, block) in self.on_current_table[self.on_current_table_offset..]
@@ -370,9 +239,9 @@ impl<T: Word> DFScheduler<T> {
                 return Some(Some(self.schedule.len()));
             }
         }
-		if self.schedule.len() < self.player_count {
-			return None;
-		}
+        if self.schedule.len() < self.player_count {
+            return None;
+        }
         self.min_player = self.schedule.pop();
 
         if let Some(player) = self.min_player {
@@ -387,7 +256,7 @@ impl<T: Word> DFScheduler<T> {
                 } else {
                     self.current_table -= 1;
                 }
-                self.current_position_in_table = self.groups[self.current_table] - 1;
+                self.current_position_in_table = self.groups[self.current_table].get() - 1;
                 self.on_current_table_offset -= self.player_bit_word_count;
                 self.on_current_table
                     .truncate(self.on_current_table_offset + self.player_bit_word_count);

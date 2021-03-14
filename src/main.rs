@@ -1,6 +1,9 @@
 fn main() {
-    let mut scheduler =
-        df_social_schedule::df_schedule::DFScheduler::<u32>::new(&[4, 4, 4, 4, 4, 4]);
+    let groups = [4, 4, 4, 4, 4, 4]
+        .iter()
+        .filter_map(|x| std::num::NonZeroUsize::new(*x))
+        .collect::<Vec<_>>();
+    let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<u32>::new(&groups);
     let mut best_length = 0;
 
     let ops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -12,10 +15,11 @@ fn main() {
         let ops = ops.clone();
         let running = running.clone();
         let best_string = best_string.clone();
-		let current_string = current_string.clone();
+        let current_string = current_string.clone();
         std::thread::spawn(move || {
             let now = std::time::Instant::now();
-            while running.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut should_continue = true;
+            while should_continue {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 println!(
                     "ops /s: {}\nCurrent:\n{}\nBest:\n{}\n",
@@ -24,6 +28,7 @@ fn main() {
                     current_string.lock().unwrap(),
                     best_string.lock().unwrap()
                 );
+                should_continue = running.load(std::sync::atomic::Ordering::Relaxed);
             }
         })
     };
@@ -32,7 +37,7 @@ fn main() {
         local_ops += 1;
         if local_ops > 100_000 {
             ops.fetch_add(local_ops, std::sync::atomic::Ordering::Relaxed);
-            *current_string.lock().unwrap() = scheduler.print_schedule();
+            //*current_string.lock().unwrap() = scheduler.print_schedule();
             local_ops = 0;
         }
 
