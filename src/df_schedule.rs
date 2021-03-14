@@ -70,9 +70,6 @@ derive_word!(u64);
 derive_word!(u128);
 derive_word!(usize);
 
-
-
-
 #[derive(Debug)]
 pub struct DFScheduler<T>
 where
@@ -126,28 +123,12 @@ impl<T: Word> DFScheduler<T> {
         }
     }
 
-    pub fn print_schedule(&mut self) -> String {
-        let mut output = String::new();
-        let mut round_vec = Vec::new();
-        let mut table_vec = Vec::new();
-        for player in self.schedule.iter() {
-            table_vec.push(player);
-            if table_vec.len() >= self.groups[round_vec.len()].get() {
-                round_vec.push(table_vec);
-                table_vec = Vec::new();
-                if round_vec.len() >= self.groups.len() {
-                    output.push_str(&format!("{:?}\n", round_vec));
-                    round_vec.clear();
-                }
-            }
-        }
-        if !table_vec.is_empty() {
-            round_vec.push(table_vec);
-        }
-        if !round_vec.is_empty() {
-            output.push_str(&format!("{:?}", round_vec));
-        }
-        output
+    pub fn clone_schedule_into(&self, other: &mut Vec<usize>) {
+        other.clone_from(&self.schedule);
+    }
+
+    pub fn get_schedule(&self) -> Vec<usize> {
+        self.schedule.clone()
     }
 
     #[inline(always)]
