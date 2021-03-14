@@ -370,6 +370,9 @@ impl<T: Word> DFScheduler<T> {
                 return Some(Some(self.schedule.len()));
             }
         }
+		if self.schedule.len() < self.player_count {
+			return None;
+		}
         self.min_player = self.schedule.pop();
 
         if let Some(player) = self.min_player {

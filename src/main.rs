@@ -6,19 +6,22 @@ fn main() {
     let ops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let best_string = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let current_string = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
 
     let output_thread = {
         let ops = ops.clone();
         let running = running.clone();
         let best_string = best_string.clone();
+		let current_string = current_string.clone();
         std::thread::spawn(move || {
             let now = std::time::Instant::now();
             while running.load(std::sync::atomic::Ordering::Relaxed) {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 println!(
-                    "ops /s: {}\n{}",
+                    "ops /s: {}\nCurrent:\n{}\nBest:\n{}\n",
                     ops.load(std::sync::atomic::Ordering::Relaxed) as f32
                         / now.elapsed().as_secs_f32(),
+                    current_string.lock().unwrap(),
                     best_string.lock().unwrap()
                 );
             }
@@ -29,6 +32,7 @@ fn main() {
         local_ops += 1;
         if local_ops > 100_000 {
             ops.fetch_add(local_ops, std::sync::atomic::Ordering::Relaxed);
+            *current_string.lock().unwrap() = scheduler.print_schedule();
             local_ops = 0;
         }
 
