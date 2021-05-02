@@ -23,20 +23,22 @@ pub fn print_schedule(schedule: &[usize], groups: &[std::num::NonZeroUsize]) -> 
 }
 
 fn main() {
-    let groups = [4, 4, 4, 4, 4, 4]
+    let groups = [4; 6]
         .iter()
         .filter_map(|x| std::num::NonZeroUsize::new(*x))
         .collect::<Vec<_>>();
-    let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<u32>::new(&groups);
+    let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<usize>::new(&groups);
     let mut best_length = 0;
 
     let ops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let best_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let best_string = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let current_string = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let output_thread = {
         let ops = ops.clone();
+        let best_counter = best_counter.clone();
         let running = running.clone();
         let best_string = best_string.clone();
         let current_string = current_string.clone();
@@ -47,11 +49,14 @@ fn main() {
             while should_continue {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 println!(
-                    "ops /s: {}\nCurrent:\n{}\nBest:\n{}\n",
+                    "ops /s: {}\nCurrent:\n{}\nBest:\n{}\nBest Count: {}\nBest Count/s: {}\n",
                     ops.load(std::sync::atomic::Ordering::Relaxed) as f32
                         / now.elapsed().as_secs_f32(),
                     print_schedule(&current_string.lock().unwrap(), &groups),
-                    best_string.lock().unwrap()
+                    best_string.lock().unwrap(),
+                    best_counter.load(std::sync::atomic::Ordering::Relaxed),
+                    best_counter.load(std::sync::atomic::Ordering::Relaxed) as f32
+                        / now.elapsed().as_secs_f32()
                 );
                 should_continue = running.load(std::sync::atomic::Ordering::Relaxed);
             }
@@ -70,6 +75,9 @@ fn main() {
             if size > best_length {
                 best_length = size;
                 *best_string.lock().unwrap() = print_schedule(&scheduler.get_schedule(), &groups);
+                best_counter.store(1, std::sync::atomic::Ordering::Relaxed);
+            } else if size == best_length {
+                best_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }

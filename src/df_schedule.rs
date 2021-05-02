@@ -10,6 +10,8 @@ pub trait Word:
     + BitXorAssign<Self>
     + Shl<usize, Output = Self>
     + Shr<usize, Output = Self>
+    + Sub<Self, Output = Self>
+    + SubAssign<Self>
     + Not<Output = Self>
     + Copy
     + Clone
@@ -147,7 +149,24 @@ impl<T: Word> DFScheduler<T> {
 
     #[inline(always)]
     pub fn step(&mut self) -> Option<Option<usize>> {
+        let (min_player_byte, min_player_mask) = if let Some(min_player) = self.min_player {
+            let min_player_byte = min_player / T::SIZE;
+            let min_player_bit = (T::ONE << (min_player - (min_player_byte * T::SIZE)));
+            let min_player_mask = !((min_player_bit - T::ONE) | min_player_bit);
+            assert!(min_player_mask != T::MAX);
+            (Some(min_player_byte), min_player_mask)
+        } else {
+            (None, T::ZERO)
+        };
         'outer: for (i, mut temp) in self.temp_buffer.iter().cloned().enumerate() {
+            if let Some(min_player_byte) = min_player_byte {
+                if i < min_player_byte {
+                    continue;
+                }
+                if i == min_player_byte {
+                    temp &= min_player_mask;
+                }
+            }
             while temp != T::ZERO {
                 let trailing_zeros = temp.trailing_zeros() as usize;
                 let player = trailing_zeros + i * T::SIZE;
@@ -156,13 +175,10 @@ impl<T: Word> DFScheduler<T> {
                 if player >= self.player_count {
                     break 'outer;
                 }
-                if self
+                debug_assert!(self
                     .min_player
-                    .map(|min_player| player <= min_player)
-                    .unwrap_or(false)
-                {
-                    continue;
-                }
+                    .map(|min_player| player >= min_player)
+                    .unwrap_or(true));
                 self.on_current_table[self.on_current_table_offset + i] |= player_bit;
 
                 self.schedule.push(player);
@@ -187,8 +203,13 @@ impl<T: Word> DFScheduler<T> {
                         }
                     }
 
+                    self.min_player = None;
+
                     self.current_table += 1;
                     if self.current_table >= self.groups.len() {
+                        assert!(self.schedule.len() % self.player_count == 0);
+                        self.min_player =
+                            Some(self.schedule[self.schedule.len() - self.player_count]); // Each row must start with higher player than previous row
                         self.current_table = 0;
                         self.current_round += 1;
                         self.played_in_round.resize(
@@ -203,7 +224,6 @@ impl<T: Word> DFScheduler<T> {
                         self.on_current_table_offset + self.player_bit_word_count,
                         T::ZERO,
                     );
-                    self.min_player = None;
 
                     for (i, ptr) in self.temp_buffer.iter_mut().enumerate() {
                         *ptr = !self.played_in_round
@@ -217,15 +237,31 @@ impl<T: Word> DFScheduler<T> {
                         *ptr &= !self.players_played_with[player * self.player_bit_word_count + i];
                     }
                 }
+                if self.schedule.len() > self.best_length {
+                    self.best_length = self.schedule.len();
+                }
                 return Some(Some(self.schedule.len()));
             }
         }
+
+        if self.backtrack() {
+            Some(None)
+        } else {
+            None
+        }
+    }
+
+    fn backtrack(&mut self) -> bool {
         if self.schedule.len() < self.player_count {
-            return None;
+            return false;
         }
         self.min_player = self.schedule.pop();
 
         if let Some(player) = self.min_player {
+            let byte = player / T::SIZE;
+
+            let mask = !(T::ONE << (player - (byte * T::SIZE)));
+
             if self.current_position_in_table == 0 {
                 if self.current_table == 0 {
                     self.current_table = self.groups.len() - 1;
@@ -245,29 +281,24 @@ impl<T: Word> DFScheduler<T> {
                 self.current_position_in_table -= 1;
             }
 
-            let byte = player / T::SIZE;
-
+            self.played_in_round[self.current_round * self.player_bit_word_count + byte] &= mask;
+            self.on_current_table[self.on_current_table_offset + byte] &= mask;
             self.played_on_table_total[self.current_table * self.player_bit_word_count + byte] &=
-                !(T::ONE << (player - (byte * T::SIZE)));
-            self.played_in_round[self.current_round * self.player_bit_word_count + byte] &=
-                !(T::ONE << (player - (byte * T::SIZE)));
-            self.on_current_table[self.on_current_table_offset + byte] &=
-                !(T::ONE << (player - (byte * T::SIZE)));
+                mask;
+
             for other_player in
                 self.schedule[self.schedule.len() - self.current_position_in_table..].iter()
             {
                 let other_byte = other_player / T::SIZE;
                 self.players_played_with[player * self.player_bit_word_count + other_byte] &=
                     !(T::ONE << (other_player - (other_byte * T::SIZE)));
-                self.players_played_with[other_player * self.player_bit_word_count + byte] &=
-                    !(T::ONE << (player - (byte * T::SIZE)));
+                self.players_played_with[other_player * self.player_bit_word_count + byte] &= mask;
             }
 
             self.generate_potential_players();
-
-            Some(None)
+            true
         } else {
-            None
+            false
         }
     }
 }
