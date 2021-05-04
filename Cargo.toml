@@ -19,3 +19,4 @@ harness = false
 [profile.release]
 debug = true
 debug-assertions = false
+lto = true

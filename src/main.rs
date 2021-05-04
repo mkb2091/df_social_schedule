@@ -29,6 +29,7 @@ fn main() {
         .collect::<Vec<_>>();
     let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<usize>::new(&groups);
     let mut best_length = 0;
+    let mut best_opp_count = 0;
 
     let ops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let best_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -63,21 +64,36 @@ fn main() {
         })
     };
     let mut local_ops = 0;
+    let mut cloned_scheduler = scheduler.clone();
     while let Some(size) = scheduler.step() {
-        local_ops += 1;
-        if local_ops > 100_000 {
-            ops.fetch_add(local_ops, std::sync::atomic::Ordering::Relaxed);
-            scheduler.clone_schedule_into(&mut *current_string.lock().unwrap());
-            local_ops = 0;
-        }
-
         if let Some(size) = size {
+            local_ops += 1;
+            if local_ops > 100_000 {
+                ops.fetch_add(local_ops, std::sync::atomic::Ordering::Relaxed);
+                current_string
+                    .lock()
+                    .unwrap()
+                    .clone_from(scheduler.get_schedule());
+                local_ops = 0;
+            }
+            if size >= best_length {
+                cloned_scheduler.clone_from(&scheduler);
+                cloned_scheduler.fill();
+                let opp_count = cloned_scheduler.get_unique_opponents();
+                if opp_count > best_opp_count {
+                    best_opp_count = opp_count;
+                    let mut temp_best_string =
+                        print_schedule(&cloned_scheduler.get_schedule(), &groups);
+                    temp_best_string.push_str(&format!("\nUnique Opponent Count: {:?}", opp_count));
+                    *best_string.lock().unwrap() = temp_best_string;
+                    best_counter.store(1, std::sync::atomic::Ordering::Relaxed);
+                } else if opp_count == best_opp_count {
+                    best_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+
             if size > best_length {
                 best_length = size;
-                *best_string.lock().unwrap() = print_schedule(&scheduler.get_schedule(), &groups);
-                best_counter.store(1, std::sync::atomic::Ordering::Relaxed);
-            } else if size == best_length {
-                best_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }

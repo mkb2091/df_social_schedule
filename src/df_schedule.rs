@@ -72,7 +72,7 @@ derive_word!(u64);
 derive_word!(u128);
 derive_word!(usize);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DFScheduler<T>
 where
     T: Word,
@@ -125,12 +125,35 @@ impl<T: Word> DFScheduler<T> {
         }
     }
 
-    pub fn clone_schedule_into(&self, other: &mut Vec<usize>) {
-        other.clone_from(&self.schedule);
+    pub fn fill(&mut self) {
+        loop {
+            for (i, ptr) in self.temp_buffer.iter_mut().enumerate() {
+                *ptr = !self.played_in_round[self.current_round * self.player_bit_word_count + i]
+                    & !self.played_on_table_total
+                        [self.current_table * self.player_bit_word_count + i]
+                    & !self.on_current_table[self.on_current_table_offset + i];
+            }
+            if !self.step().map(|x| x.is_some()).unwrap_or(false) {
+                break;
+            }
+        }
     }
 
-    pub fn get_schedule(&self) -> Vec<usize> {
-        self.schedule.clone()
+    pub fn get_schedule(&self) -> &'_ Vec<usize> {
+        &self.schedule
+    }
+
+    pub fn get_unique_opponents(&self) -> u32 {
+        let mut opponent_count = 0;
+        for player in 0..self.player_count {
+            for ptr in self.players_played_with
+                [player * self.player_bit_word_count..(player + 1) * self.player_bit_word_count]
+                .iter()
+            {
+                opponent_count += ptr.count_ones();
+            }
+        }
+        opponent_count
     }
 
     #[inline(always)]
