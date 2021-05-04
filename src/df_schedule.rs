@@ -133,7 +133,7 @@ impl<T: Word> DFScheduler<T> {
                         [self.current_table * self.player_bit_word_count + i]
                     & !self.on_current_table[self.on_current_table_offset + i];
             }
-            if !self.step().map(|x| x.is_some()).unwrap_or(false) {
+            if self.attempt_forward().is_none() {
                 break;
             }
         }
@@ -170,8 +170,7 @@ impl<T: Word> DFScheduler<T> {
         }
     }
 
-    #[inline(always)]
-    pub fn step(&mut self) -> Option<Option<usize>> {
+    fn attempt_forward(&mut self) -> Option<usize> {
         let (min_player_byte, min_player_mask) = if let Some(min_player) = self.min_player {
             let min_player_byte = min_player / T::SIZE;
             let min_player_bit = (T::ONE << (min_player - (min_player_byte * T::SIZE)));
@@ -263,15 +262,10 @@ impl<T: Word> DFScheduler<T> {
                 if self.schedule.len() > self.best_length {
                     self.best_length = self.schedule.len();
                 }
-                return Some(Some(self.schedule.len()));
+                return Some(self.schedule.len());
             }
         }
-
-        if self.backtrack() {
-            Some(None)
-        } else {
-            None
-        }
+        None
     }
 
     fn backtrack(&mut self) -> bool {
@@ -322,6 +316,18 @@ impl<T: Word> DFScheduler<T> {
             true
         } else {
             false
+        }
+    }
+
+    #[inline(always)]
+    pub fn step(&mut self) -> Option<Option<usize>> {
+        let result = self.attempt_forward();
+        if result.is_some() {
+            Some(result)
+        } else if self.backtrack() {
+            Some(None)
+        } else {
+            None
         }
     }
 }
