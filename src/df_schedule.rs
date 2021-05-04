@@ -72,7 +72,7 @@ derive_word!(u64);
 derive_word!(u128);
 derive_word!(usize);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DFScheduler<T>
 where
     T: Word,
@@ -92,6 +92,48 @@ where
     min_player: Option<usize>,
     temp_buffer: Box<[T]>,
     best_length: usize,
+}
+
+impl<T: Word> Clone for DFScheduler<T> {
+    fn clone(&self) -> Self {
+        Self {
+            groups: self.groups.clone(),
+            player_count: self.player_count.clone(),
+            player_bit_word_count: self.player_bit_word_count.clone(),
+            players_played_with: self.players_played_with.clone(),
+            schedule: self.schedule.clone(),
+            played_on_table_total: self.played_on_table_total.clone(),
+            played_in_round: self.played_in_round.clone(),
+            on_current_table: self.on_current_table.clone(),
+            on_current_table_offset: self.on_current_table_offset.clone(),
+            current_table: self.current_table.clone(),
+            current_position_in_table: self.current_position_in_table.clone(),
+            current_round: self.current_round.clone(),
+            min_player: self.min_player.clone(),
+            temp_buffer: self.temp_buffer.clone(),
+            best_length: self.best_length.clone(),
+        }
+    }
+    fn clone_from(&mut self, other: &Self) {
+        self.groups.clone_from(&other.groups);
+        self.player_count = other.player_count;
+        self.player_bit_word_count = other.player_bit_word_count;
+        self.players_played_with
+            .clone_from(&other.players_played_with);
+        self.schedule.clone_from(&other.schedule);
+        self.played_on_table_total
+            .clone_from(&other.played_on_table_total);
+        self.played_in_round.clone_from(&other.played_in_round);
+        self.on_current_table.clone_from(&other.on_current_table);
+        self.on_current_table_offset = other.on_current_table_offset;
+        self.current_table.clone_from(&other.current_table);
+        self.current_position_in_table
+            .clone_from(&other.current_position_in_table);
+        self.current_round.clone_from(&other.current_round);
+        self.min_player.clone_from(&other.min_player);
+        self.temp_buffer.clone_from(&other.temp_buffer);
+        self.best_length.clone_from(&other.best_length);
+    }
 }
 
 impl<T: Word> DFScheduler<T> {
@@ -126,6 +168,7 @@ impl<T: Word> DFScheduler<T> {
     }
 
     pub fn fill(&mut self) {
+        self.min_player = None;
         loop {
             for (i, ptr) in self.temp_buffer.iter_mut().enumerate() {
                 *ptr = !self.played_in_round[self.current_round * self.player_bit_word_count + i]
@@ -170,6 +213,7 @@ impl<T: Word> DFScheduler<T> {
         }
     }
 
+    #[inline(always)]
     fn attempt_forward(&mut self) -> Option<usize> {
         let (min_player_byte, min_player_mask) = if let Some(min_player) = self.min_player {
             let min_player_byte = min_player / T::SIZE;

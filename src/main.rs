@@ -82,8 +82,11 @@ fn main() {
                 let opp_count = cloned_scheduler.get_unique_opponents();
                 if opp_count > best_opp_count {
                     best_opp_count = opp_count;
-                    let mut temp_best_string =
-                        print_schedule(&cloned_scheduler.get_schedule(), &groups);
+
+                    let mut temp_best_string = print_schedule(&scheduler.get_schedule(), &groups);
+                    temp_best_string.push_str("\n\n");
+                    temp_best_string
+                        .push_str(&print_schedule(&cloned_scheduler.get_schedule(), &groups));
                     temp_best_string.push_str(&format!("\nUnique Opponent Count: {:?}", opp_count));
                     *best_string.lock().unwrap() = temp_best_string;
                     best_counter.store(1, std::sync::atomic::Ordering::Relaxed);
