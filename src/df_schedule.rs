@@ -365,13 +365,8 @@ impl<T: Word> DFScheduler<T> {
 
     #[inline(always)]
     pub fn step(&mut self) -> Option<Option<usize>> {
-        let result = self.attempt_forward();
-        if result.is_some() {
-            Some(result)
-        } else if self.backtrack() {
-            Some(None)
-        } else {
-            None
-        }
+        self.attempt_forward()
+            .map(|result| Some(result))
+            .or_else(|| if self.backtrack() { Some(None) } else { None })
     }
 }
