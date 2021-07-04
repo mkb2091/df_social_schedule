@@ -51,6 +51,8 @@ fn main() {
     let mut i = 0;
     let mut last_print = std::time::Instant::now();
 
+    let mut recent_depth_stats = (0, usize::MAX);
+
     loop {
         {
             let target_size = (current_depth + 2) * SCHEDULER.get_block_size();
@@ -94,19 +96,40 @@ fn main() {
                     "New best: {:?} with depth {} step {} empty tables {}",
                     players_placed, current_depth, total_step_count, empty_tables
                 );
+                let mut output = String::new();
+                SCHEDULER
+                    .format_schedule(
+                        &buf[current_depth * SCHEDULER.get_block_size()..],
+                        &mut output,
+                    )
+                    .unwrap();
+                println!("Schedule: {}", output);
             }
+
+            if current_depth > recent_depth_stats.0 {
+                recent_depth_stats.0 = current_depth;
+            }
+
+            if current_depth < recent_depth_stats.1 {
+                recent_depth_stats.1 = current_depth;
+            }
+
             i += 1;
             check_counter += 1;
             if check_counter > check_frequency {
                 check_counter = 0;
                 if last_print.elapsed().as_millis() > 400 {
                     println!(
-                    "Current depth {} (best players_placed {} lowest empty_tables {}) with rate {}/s",
+                    "Current depth {} (recent max {} min {}) (best players_placed {} lowest empty_tables {}) with rate {}/s",
                     current_depth,
+					recent_depth_stats.1,
+					recent_depth_stats.0,
                     highest_players_placed,
 					lowest_empty_tables,
                     i as f64 / last_print.elapsed().as_secs_f64()
                 );
+
+                    recent_depth_stats = (0, usize::MAX);
 
                     last_print = std::time::Instant::now();
                     check_frequency = (i / 16).max(1);
@@ -120,8 +143,6 @@ fn main() {
         .iter()
         .filter_map(|x| std::num::NonZeroUsize::new(*x))
         .collect::<Vec<_>>();
-
-    return;
 
     let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<usize>::new(&groups);
     let mut best_length = 0;

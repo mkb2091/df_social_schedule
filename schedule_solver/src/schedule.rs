@@ -97,6 +97,82 @@ impl<'a> Schedule<'a> {
         }
     }
 
+    pub fn format_schedule<W: core::fmt::Write>(
+        &self,
+        buffer: &[usize],
+        output: &mut W,
+    ) -> core::fmt::Result {
+        fn base_10_length(n: usize) -> usize {
+            (1..)
+                .try_fold(n, |acc, i| if acc > 10 { Ok(acc / 10) } else { Err(i) })
+                .err()
+                .unwrap_or(0)
+        }
+        output.write_str("     ")?;
+        for table in 0..self.tables.len() {
+            let now = table + 1;
+            output.write_char('|')?;
+            for _ in 0..(3 - base_10_length(now)) {
+                output.write_char(' ')?;
+            }
+            output.write_fmt(format_args!("{}", now))?;
+            output.write_str("  ")?;
+        }
+
+        for round in 0..self.tables.len() {
+            output.write_str("\n-----")?;
+            for _ in 0..self.tables.len() {
+                output.write_char('+')?;
+                output.write_str("-----")?;
+            }
+            for i in 0..(self.player_count / self.tables.len() + 1) {
+                if i == (self.player_count / self.tables.len() + 1) / 2 {
+                    output.write_char('\n')?;
+                    let now = round + 1;
+                    for _ in 0..(3 - base_10_length(now)) {
+                        output.write_char(' ')?;
+                    }
+                    output.write_fmt(format_args!("{}", now))?;
+                    output.write_str("  ")?;
+                } else {
+                    output.write_str("\n     ")?;
+                }
+                'table: for table in 0..self.tables.len() {
+                    output.write_char('|')?;
+                    let mut counter = 0;
+                    for byte in 0..self.player_bit_word_count {
+                        let mut temp = buffer[self.offsets.played_on_table_offset
+                            + self.player_bit_word_count * (round * self.tables.len() + table)
+                            + byte];
+                        while temp != 0 {
+                            let trailing_zeros = temp.trailing_zeros() as usize;
+                            let player = byte * Self::word_size() + trailing_zeros;
+                            let player_bit = 1 << trailing_zeros;
+                            temp &= !player_bit;
+                            if counter == i {
+                                let now = player;
+                                for _ in 0..(3 - base_10_length(now)) {
+                                    output.write_char(' ')?;
+                                }
+                                output.write_fmt(format_args!("{}", now))?;
+                                output.write_str("  ")?;
+                                continue 'table;
+                            }
+                            counter += 1;
+                        }
+                    }
+
+                    output.write_str("     ")?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn get_schedule<'b>(&self, buffer: &'b [usize]) -> &'b [usize] {
+        &buffer[self.offsets.played_on_table_offset..][..self.offsets.played_on_table_size]
+    }
+
     pub const fn get_block_size(&self) -> usize {
         self.offsets.block_size
     }
