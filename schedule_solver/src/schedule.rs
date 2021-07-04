@@ -317,9 +317,9 @@ impl<'a> Schedule<'a> {
                             let pos = self.offsets.to_explore_offset + i * 2;
                             let end = self.offsets.to_explore_offset
                                 + buffer_2[self.offsets.empty_table_count_offset] * 2;
-                            buffer_2[pos..end].rotate_left(2);
-                            //buffer_2.swap(pos, end - 2);
-                            //buffer_2.swap(pos + 1, end - 1);
+                            //buffer_2[pos..end].rotate_left(2);
+                            buffer_2.swap(pos, end - 2);
+                            buffer_2.swap(pos + 1, end - 1);
                             buffer_2[self.offsets.empty_table_count_offset] -= 1;
                         }
                         return Some(false);
