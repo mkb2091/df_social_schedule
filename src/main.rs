@@ -67,7 +67,7 @@ fn main() {
                     current_depth += 1;
                 }
             } else {
-                current_depth -= 1;
+                current_depth = current_depth.checked_sub(1).expect("No valid schedule");
             }
         }
         total_step_count += 1;
