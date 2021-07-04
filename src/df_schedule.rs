@@ -1,4 +1,4 @@
-use std::ops::*;
+use core::ops::*;
 
 pub trait Word:
     Sized
@@ -71,6 +71,12 @@ derive_word!(u32);
 derive_word!(u64);
 derive_word!(u128);
 derive_word!(usize);
+derive_word!(i8);
+derive_word!(i16);
+derive_word!(i32);
+derive_word!(i64);
+derive_word!(i128);
+derive_word!(isize);
 
 #[derive(Debug)]
 pub struct DFScheduler<T>
@@ -98,20 +104,20 @@ impl<T: Word> Clone for DFScheduler<T> {
     fn clone(&self) -> Self {
         Self {
             groups: self.groups.clone(),
-            player_count: self.player_count.clone(),
-            player_bit_word_count: self.player_bit_word_count.clone(),
+            player_count: self.player_count,
+            player_bit_word_count: self.player_bit_word_count,
             players_played_with: self.players_played_with.clone(),
             schedule: self.schedule.clone(),
             played_on_table_total: self.played_on_table_total.clone(),
             played_in_round: self.played_in_round.clone(),
             on_current_table: self.on_current_table.clone(),
-            on_current_table_offset: self.on_current_table_offset.clone(),
-            current_table: self.current_table.clone(),
-            current_position_in_table: self.current_position_in_table.clone(),
-            current_round: self.current_round.clone(),
-            min_player: self.min_player.clone(),
+            on_current_table_offset: self.on_current_table_offset,
+            current_table: self.current_table,
+            current_position_in_table: self.current_position_in_table,
+            current_round: self.current_round,
+            min_player: self.min_player,
             temp_buffer: self.temp_buffer.clone(),
-            best_length: self.best_length.clone(),
+            best_length: self.best_length,
         }
     }
     fn clone_from(&mut self, other: &Self) {
@@ -167,6 +173,13 @@ impl<T: Word> DFScheduler<T> {
         }
     }
 
+    pub fn count_ones(&self) -> Vec<u32> {
+        self.on_current_table
+            .iter()
+            .map(|i| i.count_ones())
+            .collect()
+    }
+
     pub fn fill(&mut self) {
         self.min_player = None;
         loop {
@@ -217,7 +230,7 @@ impl<T: Word> DFScheduler<T> {
     fn attempt_forward(&mut self) -> Option<usize> {
         let (min_player_byte, min_player_mask) = if let Some(min_player) = self.min_player {
             let min_player_byte = min_player / T::SIZE;
-            let min_player_bit = (T::ONE << (min_player - (min_player_byte * T::SIZE)));
+            let min_player_bit = T::ONE << (min_player - (min_player_byte * T::SIZE));
             let min_player_mask = !((min_player_bit - T::ONE) | min_player_bit);
             assert!(min_player_mask != T::MAX);
             (Some(min_player_byte), min_player_mask)
@@ -366,7 +379,7 @@ impl<T: Word> DFScheduler<T> {
     #[inline(always)]
     pub fn step(&mut self) -> Option<Option<usize>> {
         self.attempt_forward()
-            .map(|result| Some(result))
+            .map(Some)
             .or_else(|| if self.backtrack() { Some(None) } else { None })
     }
 }

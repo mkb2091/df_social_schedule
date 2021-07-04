@@ -1,3 +1,5 @@
+#![feature(const_mut_refs)]
+
 pub fn print_schedule(schedule: &[usize], groups: &[std::num::NonZeroUsize]) -> String {
     let mut output = String::new();
     let mut round_vec = Vec::new();
@@ -23,10 +25,78 @@ pub fn print_schedule(schedule: &[usize], groups: &[std::num::NonZeroUsize]) -> 
 }
 
 fn main() {
+    const GROUPS: [usize; 6] = [4; 6];
+
+    const SCHEDULER: schedule_solver::Schedule =
+        schedule_solver::Schedule::new(&GROUPS, GROUPS.len());
+    const BUF: [usize; SCHEDULER.get_block_size()] = {
+        let mut buf = [0; SCHEDULER.get_block_size()];
+        SCHEDULER.initialise_buffer(&mut buf);
+        buf
+    };
+
+    println!("buf: {:?}", BUF);
+
+    let mut buf = BUF.to_vec();
+    buf.resize(10000, 0);
+
+    let mut current_depth = 0;
+
+    let mut highest = 0;
+    let mut i = 0;
+    let mut last_print = std::time::Instant::now();
+
+    loop {
+        {
+            if (current_depth + 1) * SCHEDULER.get_block_size() > buf.len() {
+                buf.resize(buf.len() + SCHEDULER.get_block_size() * 5, 0);
+            }
+            let buffer: &mut [usize] = &mut buf[current_depth * SCHEDULER.get_block_size()..];
+            let (buf_1, buf_2) = buffer.split_at_mut(SCHEDULER.get_block_size());
+            if let Some(finished) = SCHEDULER.step(buf_1, buf_2) {
+                if finished {
+                    println!("Finished");
+                    return;
+                } else {
+                    current_depth += 1;
+                }
+            } else {
+                current_depth -= 1;
+            }
+        }
+
+        {
+            let players_placed =
+                SCHEDULER.get_players_placed(&buf[current_depth * SCHEDULER.get_block_size()..]);
+            if players_placed > highest {
+                highest = players_placed;
+                println!(
+                    "New best: {:?} with depth {}",
+                    players_placed, current_depth
+                );
+            }
+            i += 1;
+
+            if last_print.elapsed().as_millis() > 400 {
+                println!(
+                    "Current depth {} with rate {}/s",
+                    current_depth,
+                    i as f64 / last_print.elapsed().as_secs_f64()
+                );
+
+                last_print = std::time::Instant::now();
+                i = 0;
+            }
+        }
+    }
+
     let groups = [4; 6]
         .iter()
         .filter_map(|x| std::num::NonZeroUsize::new(*x))
         .collect::<Vec<_>>();
+
+    return;
+
     let mut scheduler = df_social_schedule::df_schedule::DFScheduler::<usize>::new(&groups);
     let mut best_length = 0;
     let mut best_opp_count = 0;
@@ -82,6 +152,9 @@ fn main() {
                 let opp_count = cloned_scheduler.get_unique_opponents();
                 if opp_count > best_opp_count {
                     best_opp_count = opp_count;
+                    best_length = size;
+
+                    println!("Ones: {:?}", scheduler.count_ones());
 
                     let mut temp_best_string = print_schedule(&scheduler.get_schedule(), &groups);
                     temp_best_string.push_str("\n\n");
@@ -93,10 +166,6 @@ fn main() {
                 } else if opp_count == best_opp_count {
                     best_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
-            }
-
-            if size > best_length {
-                best_length = size;
             }
         }
     }
