@@ -40,7 +40,6 @@ fn main() {
     println!("buf: {:?}", BUF);
 
     let mut buf = BUF.to_vec();
-    buf.resize(10000, 0);
 
     let mut current_depth = 0;
 
@@ -54,8 +53,9 @@ fn main() {
 
     loop {
         {
-            if (current_depth + 2) * SCHEDULER.get_block_size() > buf.len() {
-                buf.resize(buf.len() + SCHEDULER.get_block_size() * 5, 0);
+            let target_size = (current_depth + 2) * SCHEDULER.get_block_size();
+            if target_size > buf.len() {
+                buf.resize(target_size, 0);
             }
             let buffer: &mut [usize] = &mut buf[current_depth * SCHEDULER.get_block_size()..];
             let (buf_1, buf_2) = buffer.split_at_mut(SCHEDULER.get_block_size());
@@ -63,9 +63,9 @@ fn main() {
                 if finished {
                     assert_eq!(SCHEDULER.get_players_placed(buf_1), 4 * 6 * 6);
                     assert_eq!(SCHEDULER.get_empty_table_count(buf_1), 0);
-                    //println!("Found a solution: {:?}", buf_1);
-                    current_depth -= 1;
-                    //return;
+                    println!("Found a solution: {:?}", buf_1);
+                    //current_depth -= 1;
+                    return;
                 } else {
                     current_depth += 1;
                 }
