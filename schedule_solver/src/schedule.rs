@@ -298,6 +298,10 @@ impl<'a> Schedule<'a> {
                             & fixed
                             != 0
                         {
+                            buffer_1[offset
+                                + self.player_bit_word_count
+                                    * (round * self.tables.len() + table)
+                                + byte] &= !player_bit;
                             continue;
                         }
 

@@ -48,6 +48,7 @@ fn main() {
     let mut highest_players_placed = 0;
     let mut lowest_empty_tables = usize::MAX;
     let mut check_frequency = 1;
+    let mut check_counter = 0;
     let mut i = 0;
     let mut last_print = std::time::Instant::now();
 
@@ -95,9 +96,11 @@ fn main() {
                 );
             }
             i += 1;
-
-            if i % check_frequency == 0 && last_print.elapsed().as_millis() > 400 {
-                println!(
+            check_counter += 1;
+            if check_counter > check_frequency {
+                check_counter = 0;
+                if last_print.elapsed().as_millis() > 400 {
+                    println!(
                     "Current depth {} (best players_placed {} lowest empty_tables {}) with rate {}/s",
                     current_depth,
                     highest_players_placed,
@@ -105,9 +108,10 @@ fn main() {
                     i as f64 / last_print.elapsed().as_secs_f64()
                 );
 
-                last_print = std::time::Instant::now();
-                check_frequency = (i / 16).max(1);
-                i = 0;
+                    last_print = std::time::Instant::now();
+                    check_frequency = (i / 16).max(1);
+                    i = 0;
+                }
             }
         }
     }
