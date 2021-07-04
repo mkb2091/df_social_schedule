@@ -45,7 +45,8 @@ fn main() {
     let mut current_depth = 0;
 
     let mut total_step_count = 0;
-    let mut highest = 0;
+    let mut highest_players_placed = 0;
+    let mut lowest_empty_tables = usize::MAX;
     let mut i = 0;
     let mut last_print = std::time::Instant::now();
 
@@ -75,24 +76,31 @@ fn main() {
         {
             let players_placed =
                 SCHEDULER.get_players_placed(&buf[current_depth * SCHEDULER.get_block_size()..]);
-            if players_placed > highest {
-                highest = players_placed;
+            let empty_tables =
+                SCHEDULER.get_empty_table_count(&buf[current_depth * SCHEDULER.get_block_size()..]);
+            let mut should_print = false;
+            if players_placed > highest_players_placed {
+                highest_players_placed = players_placed;
+                should_print = true;
+            }
+            if empty_tables < lowest_empty_tables {
+                lowest_empty_tables = empty_tables;
+                should_print = true;
+            }
+            if should_print {
                 println!(
                     "New best: {:?} with depth {} step {} empty tables {}",
-                    players_placed,
-                    current_depth,
-                    total_step_count,
-                    SCHEDULER
-                        .get_empty_table_count(&buf[current_depth * SCHEDULER.get_block_size()..])
+                    players_placed, current_depth, total_step_count, empty_tables
                 );
             }
             i += 1;
 
             if last_print.elapsed().as_millis() > 400 {
                 println!(
-                    "Current depth {} (best players_placed {}) with rate {}/s",
+                    "Current depth {} (best players_placed {} lowest empty_tables {}) with rate {}/s",
                     current_depth,
-                    highest,
+                    highest_players_placed,
+					lowest_empty_tables,
                     i as f64 / last_print.elapsed().as_secs_f64()
                 );
 

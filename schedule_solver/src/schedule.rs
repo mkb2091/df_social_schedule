@@ -1,5 +1,3 @@
-use core::num::NonZeroUsize;
-
 #[derive(Debug)]
 pub enum ScheduleErrors {
     ZeroLengthGroups,
@@ -283,11 +281,10 @@ impl<'a> Schedule<'a> {
                     let fixed = buffer_1[self.offsets.played_on_table_offset
                         + self.player_bit_word_count * (round * self.tables.len() + table)
                         + byte];
-                    let mut potential = buffer_1[offset
+                    let potential = buffer_1[offset
                         + self.player_bit_word_count * (round * self.tables.len() + table)
                         + byte]
                         & !fixed;
-                    let potential = potential;
                     let mut temp = potential;
                     while temp != 0 {
                         let trailing_zeros = temp.trailing_zeros() as usize;
@@ -323,34 +320,7 @@ impl<'a> Schedule<'a> {
                 }
                 return None; // Could not place any player but fixed_player_count < table_size
             } else if fixed_player_count >= table_size as u32 {
-                println!(
-                    "\nfixed_player_count: {}, table_size: {}",
-                    fixed_player_count, table_size
-                );
-                println!("round: {}, table: {}", round, table);
-                println!(
-                    "played in round: {:b}",
-                    buffer_1[self.offsets.played_in_round_offset
-                        + self.player_bit_word_count * round
-                        + 0]
-                );
-                println!(
-                    "played on table {:b}",
-                    buffer_1[self.offsets.played_on_table_total_offset
-                        + self.player_bit_word_count * table
-                        + 0]
-                );
-                println!(
-                    "data: {:b}",
-                    buffer_1
-                        [offset + self.player_bit_word_count * (round * self.tables.len() + table)]
-                );
-                println!(
-                    "data: {:b}",
-                    buffer_1[self.offsets.played_on_table_offset
-                        + self.player_bit_word_count * (round * self.tables.len() + table)]
-                );
-                panic!();
+                unreachable!();
             }
         }
         Some(true)
