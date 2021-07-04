@@ -305,7 +305,10 @@ impl<'a> Schedule<'a> {
                             continue;
                         }
 
-                        buffer_2.copy_from_slice(buffer_1);
+                        //buffer_2.copy_from_slice(buffer_1);
+                        for i in 0..self.offsets.block_size {
+                            buffer_2[i] = buffer_1[i];
+                        }
                         buffer_1[offset
                             + self.player_bit_word_count * (round * self.tables.len() + table)
                             + byte] &= !player_bit;
