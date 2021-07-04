@@ -14,6 +14,8 @@ pub enum ScheduleResult {}
 #[derive(Debug)]
 struct Offsets {
     players_placed_counter_offset: usize,
+    empty_table_count_offset: usize,
+    to_explore_offset: usize,
     played_with_offset: usize,
     played_on_table_total_offset: usize,
     played_in_round_offset: usize,
@@ -24,19 +26,24 @@ struct Offsets {
 
 impl Offsets {
     const fn new(
+        to_explore_size: usize,
         played_with_size: usize,
         played_on_table_total_size: usize,
         played_in_round_size: usize,
         played_on_table_size: usize,
     ) -> Self {
         let players_placed_counter_offset = 0;
-        let played_with_offset = 1;
+        let empty_table_count_offset = players_placed_counter_offset + 1;
+        let to_explore_offset = empty_table_count_offset + 1;
+        let played_with_offset = to_explore_offset + to_explore_size;
         let played_on_table_total_offset = played_with_offset + played_with_size;
         let played_in_round_offset = played_on_table_total_offset + played_on_table_total_size;
         let played_on_table_offset = played_in_round_offset + played_in_round_size;
         let block_size = played_on_table_offset + played_on_table_size;
         Self {
             players_placed_counter_offset,
+            empty_table_count_offset,
+            to_explore_offset,
             played_with_offset,
             played_on_table_total_offset,
             played_in_round_offset,
@@ -71,7 +78,9 @@ impl<'a> Schedule<'a> {
         let played_on_table_total_size = player_bit_word_count * tables.len();
         let played_in_round_size = player_bit_word_count * rounds;
         let played_on_table_size = player_bit_word_count * tables.len() * rounds;
+        let to_explore_size = rounds * tables.len() * 2;
         let offsets = Offsets::new(
+            to_explore_size,
             played_with_size,
             played_on_table_total_size,
             played_in_round_size,
@@ -92,15 +101,16 @@ impl<'a> Schedule<'a> {
     }
 
     #[must_use]
-    pub const fn initialise_buffer(&self, buffer: &mut [usize]) -> Option<()> {
+    pub const fn initialise_buffer(&self, buffer: &mut [usize]) -> bool {
         if buffer.len() < self.offsets.block_size {
-            return None;
+            return false;
         }
         let mut i = 0;
         while i < self.offsets.block_size {
             buffer[i] = 0;
             i += 1;
         }
+
         let max = Self::get_byte_and_mask(self.player_count);
         let start =
             self.offsets.played_on_table_offset + self.player_bit_word_count * self.tables.len(); // Skip first round
@@ -118,6 +128,20 @@ impl<'a> Schedule<'a> {
             i += 1;
         }
 
+        buffer[self.offsets.empty_table_count_offset] = (self.rounds - 1) * self.tables.len();
+        let mut round = 1;
+        while round < self.rounds {
+            let mut table = 0;
+            while table < self.tables.len() {
+                let offset =
+                    self.offsets.to_explore_offset + ((round - 1) * self.tables.len() + table) * 2;
+                buffer[offset] = round;
+                buffer[offset + 1] = table;
+                table += 1;
+            }
+            round += 1;
+        }
+
         let mut pos = 0;
         let mut table_number = 0;
         while table_number < self.tables.len() {
@@ -130,8 +154,7 @@ impl<'a> Schedule<'a> {
             pos += size;
             table_number += 1;
         }
-
-        None
+        true
     }
 
     const fn word_size() -> usize {
@@ -156,7 +179,7 @@ impl<'a> Schedule<'a> {
         let (byte, player_mask) = Self::get_byte_and_mask(player);
         let remove_player_mask = !player_mask;
         let offset = self.offsets.played_on_table_offset;
-        buffer[self.offsets.players_placed_counter_offset] += 1;
+        buffer[self.offsets.players_placed_counter_offset] += 1; // Will double count if called multiple times
         {
             let mut r2 = 0;
             while r2 < self.rounds {
@@ -210,7 +233,7 @@ impl<'a> Schedule<'a> {
             }
         }
 
-        if table == 0 {
+        /*if table == 0 {
             let mask_less = player_mask - 1;
             let mask_above = !player_mask & !mask_less;
             {
@@ -249,7 +272,7 @@ impl<'a> Schedule<'a> {
                     r2 += 1;
                 }
             }
-        }
+        }*/
 
         // Add player back to their own table+round
         buffer[offset + self.player_bit_word_count * (round * self.tables.len() + table) + byte] |=
@@ -261,59 +284,117 @@ impl<'a> Schedule<'a> {
         buffer[self.offsets.players_placed_counter_offset]
     }
 
+    pub const fn get_empty_table_count(&self, buffer: &[usize]) -> usize {
+        buffer[self.offsets.empty_table_count_offset]
+    }
+
     pub fn step(&self, buffer_1: &mut [usize], buffer_2: &mut [usize]) -> Option<bool> {
         let buffer_1 = &mut buffer_1[..self.offsets.block_size];
         let buffer_2 = &mut buffer_2[..self.offsets.block_size];
 
+        /*println!(
+            "buffer_1: {:?}\nEmpty table count: {}\n\n\n",
+            buffer_1, buffer_1[self.offsets.empty_table_count_offset]
+        );
+
+        println!(
+            "{:?}",
+            buffer_1[self.offsets.played_on_table_offset..]
+                .iter()
+                .map(|i| format!("{:b}", i))
+                .collect::<Vec<_>>()
+        );*/
+
         let offset = self.offsets.played_on_table_offset;
-        for round in 0..self.rounds {
-            for (table, table_size) in self.tables.iter().enumerate() {
-                let mut fixed_player_count = 0;
-                let mut potential_player_count = 0;
-                for byte in 0..self.player_bit_word_count {
-                    let fixed = buffer_1[self.offsets.played_in_round_offset
+
+        //for round in 0..self.rounds {
+        //    for (table, table_size) in self.tables.iter().enumerate() {
+        for i in 0..buffer_1[self.offsets.empty_table_count_offset] {
+            let round = buffer_1[self.offsets.to_explore_offset + i * 2];
+            let table = buffer_1[self.offsets.to_explore_offset + i * 2 + 1];
+            let table_size = self.tables[table];
+
+            let mut fixed_player_count = 0;
+            for byte in 0..self.player_bit_word_count {
+                let fixed = buffer_1[offset
+                    + self.player_bit_word_count * (round * self.tables.len() + table)
+                    + byte]
+                    & buffer_1[self.offsets.played_in_round_offset
                         + self.player_bit_word_count * round
                         + byte]
-                        & buffer_1[self.offsets.played_on_table_total_offset
-                            + self.player_bit_word_count * table
-                            + byte];
-                    fixed_player_count += fixed.count_ones();
-                    potential_player_count += (buffer_1[offset
-                        + self.player_bit_word_count * (round * self.tables.len() + table)
-                        + byte]
-                        & !(fixed))
-                        .count_ones();
-                }
+                    & buffer_1[self.offsets.played_on_table_total_offset
+                        + self.player_bit_word_count * table
+                        + byte];
+                fixed_player_count += fixed.count_ones();
+            }
 
-                if fixed_player_count < *table_size as u32 {
-                    if potential_player_count < *table_size as u32 {
-                        return None;
-                    }
-                    for byte in 0..self.player_bit_word_count {
-                        let mut potential = buffer_1[offset
+            if fixed_player_count < table_size as u32 {
+                for byte in 0..self.player_bit_word_count {
+                    let mut potential = buffer_1[offset
+                        + self.player_bit_word_count * (round * self.tables.len() + table)
+                        + byte];
+                    potential &= !buffer_1[self.offsets.played_in_round_offset
+                        + self.player_bit_word_count * round
+                        + byte];
+                    potential &= !buffer_1[self.offsets.played_on_table_total_offset
+                        + self.player_bit_word_count * table
+                        + byte];
+                    while potential != 0 {
+                        let trailing_zeros = potential.trailing_zeros() as usize;
+                        let player = byte * Self::word_size() + trailing_zeros;
+                        let player_bit = 1 << trailing_zeros;
+                        potential &= !player_bit;
+                        buffer_2.copy_from_slice(buffer_1);
+                        buffer_1[offset
                             + self.player_bit_word_count * (round * self.tables.len() + table)
-                            + byte];
-                        potential &= !buffer_1[self.offsets.played_in_round_offset
-                            + self.player_bit_word_count * round
-                            + byte];
-                        potential &= !buffer_1[self.offsets.played_on_table_total_offset
-                            + self.player_bit_word_count * table
-                            + byte];
-                        while potential != 0 {
-                            let trailing_zeros = potential.trailing_zeros() as usize;
-                            let player = byte * Self::word_size() + trailing_zeros;
-                            let player_bit = 1 << trailing_zeros;
-                            potential &= !player_bit;
-                            buffer_2.copy_from_slice(buffer_1);
-                            buffer_1[offset
-                                + self.player_bit_word_count
-                                    * (round * self.tables.len() + table)
-                                + byte] &= !player_bit;
-                            self.apply_player(buffer_2, round, table, player);
-                            return Some(false);
+                            + byte] &= !player_bit;
+                        self.apply_player(buffer_2, round, table, player);
+                        //println!("Placing on round {} table {}", round, table);
+                        if fixed_player_count + 1 == table_size as u32 {
+                            //println!("Finished table on round {} table {}", round, table);
+                            if false && self.get_players_placed(buffer_2) >= 80 {
+                                println!(
+                                    "buffer_2: {:?}\nEmpty table count: {}\ni: {}\n\n",
+                                    buffer_2, buffer_2[self.offsets.empty_table_count_offset], i
+                                );
+                            }
+
+                            let pos = self.offsets.to_explore_offset + i * 2;
+                            let end = self.offsets.to_explore_offset
+                                + buffer_2[self.offsets.empty_table_count_offset] * 2;
+                            buffer_2[pos..end].rotate_left(2);
+                            //buffer_2.swap(pos, end - 2);
+                            //buffer_2.swap(pos + 1, end - 1);
+                            buffer_2[self.offsets.empty_table_count_offset] -= 1;
                         }
+                        return Some(false);
                     }
                 }
+                return None; // Could not place any player but fixed_player_count < table_size
+            } else if fixed_player_count >= table_size as u32 {
+                println!(
+                    "\nfixed_player_count: {}, table_size: {}",
+                    fixed_player_count, table_size
+                );
+                println!("round: {}, table: {}", round, table);
+                println!(
+                    "played in round: {:b}",
+                    buffer_1[self.offsets.played_in_round_offset
+                        + self.player_bit_word_count * round
+                        + 0]
+                );
+                println!(
+                    "played on table {:b}",
+                    buffer_1[self.offsets.played_on_table_total_offset
+                        + self.player_bit_word_count * table
+                        + 0]
+                );
+                println!(
+                    "data: {:b}",
+                    buffer_1
+                        [offset + self.player_bit_word_count * (round * self.tables.len() + table)]
+                );
+                panic!();
             }
         }
         Some(true)

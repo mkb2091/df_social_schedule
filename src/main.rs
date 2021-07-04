@@ -31,10 +31,12 @@ fn main() {
         schedule_solver::Schedule::new(&GROUPS, GROUPS.len());
     const BUF: [usize; SCHEDULER.get_block_size()] = {
         let mut buf = [0; SCHEDULER.get_block_size()];
-        SCHEDULER.initialise_buffer(&mut buf);
+        if !SCHEDULER.initialise_buffer(&mut buf) {
+            [1][1]; // Means failure
+        }
         buf
     };
-
+    println!("scheduler: {:?}", SCHEDULER);
     println!("buf: {:?}", BUF);
 
     let mut buf = BUF.to_vec();
@@ -42,21 +44,25 @@ fn main() {
 
     let mut current_depth = 0;
 
+    let mut total_step_count = 0;
     let mut highest = 0;
     let mut i = 0;
     let mut last_print = std::time::Instant::now();
 
     loop {
         {
-            if (current_depth + 1) * SCHEDULER.get_block_size() > buf.len() {
+            if (current_depth + 2) * SCHEDULER.get_block_size() > buf.len() {
                 buf.resize(buf.len() + SCHEDULER.get_block_size() * 5, 0);
             }
             let buffer: &mut [usize] = &mut buf[current_depth * SCHEDULER.get_block_size()..];
             let (buf_1, buf_2) = buffer.split_at_mut(SCHEDULER.get_block_size());
             if let Some(finished) = SCHEDULER.step(buf_1, buf_2) {
                 if finished {
-                    println!("Finished");
-                    return;
+                    assert_eq!(SCHEDULER.get_players_placed(buf_1), 4 * 6 * 6);
+                    assert_eq!(SCHEDULER.get_empty_table_count(buf_1), 0);
+                    //println!("Found a solution: {:?}", buf_1);
+                    current_depth -= 1;
+                    //return;
                 } else {
                     current_depth += 1;
                 }
@@ -64,6 +70,7 @@ fn main() {
                 current_depth -= 1;
             }
         }
+        total_step_count += 1;
 
         {
             let players_placed =
@@ -71,16 +78,21 @@ fn main() {
             if players_placed > highest {
                 highest = players_placed;
                 println!(
-                    "New best: {:?} with depth {}",
-                    players_placed, current_depth
+                    "New best: {:?} with depth {} step {} empty tables {}",
+                    players_placed,
+                    current_depth,
+                    total_step_count,
+                    SCHEDULER
+                        .get_empty_table_count(&buf[current_depth * SCHEDULER.get_block_size()..])
                 );
             }
             i += 1;
 
             if last_print.elapsed().as_millis() > 400 {
                 println!(
-                    "Current depth {} with rate {}/s",
+                    "Current depth {} (best players_placed {}) with rate {}/s",
                     current_depth,
+                    highest,
                     i as f64 / last_print.elapsed().as_secs_f64()
                 );
 
