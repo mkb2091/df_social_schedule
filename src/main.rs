@@ -103,7 +103,7 @@ fn main() {
                         &mut output,
                     )
                     .unwrap();
-                println!("Schedule: {}", output);
+                println!("Schedule:\n{}", output);
             }
 
             if current_depth > recent_depth_stats.0 {
