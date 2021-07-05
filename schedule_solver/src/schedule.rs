@@ -434,6 +434,20 @@ impl<'a> Schedule<'a> {
         }
     }
 
+    const fn get_fixed_count(&self, buffer: &mut [usize], round: Round, table: Table) -> u32 {
+        let mut fixed_player_count = 0;
+        let mut byte = 0;
+        while byte < self.player_bit_word_count {
+            fixed_player_count = buffer[self.offsets.played_on_table_offset
+                + self.player_bit_word_count
+                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                + byte]
+                .count_ones();
+            byte += 1;
+        }
+        fixed_player_count
+    }
+
     pub fn step(&self, buffer_1: &mut [usize], buffer_2: &mut [usize]) -> Option<bool> {
         let buffer_1 = &mut buffer_1[..self.offsets.block_size];
         let buffer_2 = &mut buffer_2[..self.offsets.block_size];
@@ -442,6 +456,8 @@ impl<'a> Schedule<'a> {
         let offset = self.offsets.potential_on_table_offset;
 
         let mut i = 0;
+
+        let mut lowest: Option<(u32, Round, Table)> = None;
 
         while i < buffer_1[self.offsets.empty_table_count_offset] {
             let round = buffer_1[self.offsets.to_explore_offset + i * 2];
@@ -457,67 +473,19 @@ impl<'a> Schedule<'a> {
             };
             let table_size = self.tables[table.as_usize()];
 
-            let mut fixed_player_count = 0;
-            for byte in 0..self.player_bit_word_count {
-                let fixed = buffer_1[self.offsets.played_on_table_offset
-                    + self.player_bit_word_count
-                        * (round.as_usize() * self.tables.len() + table.as_usize())
-                    + byte];
-                fixed_player_count += fixed.count_ones();
-            }
+            let fixed_player_count = self.get_fixed_count(buffer_1, round, table);
+
             match fixed_player_count.cmp(&(table_size as u32)) {
                 core::cmp::Ordering::Less => {
-                    for byte in 0..self.player_bit_word_count {
-                        let fixed = buffer_1[self.offsets.played_on_table_offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize())
-                            + byte];
-                        let potential = buffer_1[offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize())
-                            + byte]
-                            & !fixed;
-                        let mut temp = potential;
-                        while temp != 0 {
-                            let trailing_zeros = temp.trailing_zeros() as usize;
-                            let player = byte * Self::word_size() + trailing_zeros;
-                            let player_bit = 1 << trailing_zeros;
-                            temp &= !player_bit;
-
-                            for other_byte in 0..self.player_bit_word_count {
-                                if buffer_1[self.offsets.played_with_offset
-                                    + self.player_bit_word_count * player
-                                    + other_byte]
-                                    & buffer_1[self.offsets.played_on_table_offset
-                                        + self.player_bit_word_count
-                                            * (round.as_usize() * self.tables.len()
-                                                + table.as_usize())
-                                        + other_byte]
-                                    != 0
-                                {
-                                    // If player has already played with any of the players then remove the player from the potential
-                                    buffer_1[offset
-                                        + self.player_bit_word_count
-                                            * (round.as_usize() * self.tables.len()
-                                                + table.as_usize())
-                                        + byte] &= !player_bit;
-                                    continue;
-                                }
-                            }
-
-                            //buffer_2.copy_from_slice(buffer_1);
-                            for i in 0..self.offsets.block_size {
-                                buffer_2[i] = buffer_1[i];
-                            }
-                            buffer_1[offset
-                                + self.player_bit_word_count
-                                    * (round.as_usize() * self.tables.len() + table.as_usize())
-                                + byte] &= !player_bit;
-                            self.apply_player(buffer_2, round, table, player);
-                            return Some(false);
+                    lowest = Some(if let Some(lowest) = lowest {
+                        if fixed_player_count < lowest.0 {
+                            (fixed_player_count, round, table)
+                        } else {
+                            lowest
                         }
-                    }
-                    return None; // Could not place any player but fixed_player_count < table_size
+                    } else {
+                        (fixed_player_count, round, table)
+                    });
                 }
                 core::cmp::Ordering::Equal => {
                     let pos = self.offsets.to_explore_offset + i * 2;
@@ -542,6 +510,58 @@ impl<'a> Schedule<'a> {
                 core::cmp::Ordering::Greater => return None,
             }
             i += 1;
+        }
+
+        if let Some((_, round, table)) = lowest {
+            for byte in 0..self.player_bit_word_count {
+                let fixed = buffer_1[self.offsets.played_on_table_offset
+                    + self.player_bit_word_count
+                        * (round.as_usize() * self.tables.len() + table.as_usize())
+                    + byte];
+                let potential = buffer_1[offset
+                    + self.player_bit_word_count
+                        * (round.as_usize() * self.tables.len() + table.as_usize())
+                    + byte]
+                    & !fixed;
+                let mut temp = potential;
+                'played_iter: while temp != 0 {
+                    let trailing_zeros = temp.trailing_zeros() as usize;
+                    let player = byte * Self::word_size() + trailing_zeros;
+                    let player_bit = 1 << trailing_zeros;
+                    temp &= !player_bit;
+
+                    for other_byte in 0..self.player_bit_word_count {
+                        if buffer_1[self.offsets.played_with_offset
+                            + self.player_bit_word_count * player
+                            + other_byte]
+                            & buffer_1[self.offsets.played_on_table_offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                                + other_byte]
+                            != 0
+                        {
+                            // If player has already played with any of the players then remove the player from the potential
+                            buffer_1[offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                                + byte] &= !player_bit;
+                            continue 'played_iter;
+                        }
+                    }
+
+                    //buffer_2.copy_from_slice(buffer_1);
+                    for i in 0..self.offsets.block_size {
+                        buffer_2[i] = buffer_1[i];
+                    }
+                    buffer_1[offset
+                        + self.player_bit_word_count
+                            * (round.as_usize() * self.tables.len() + table.as_usize())
+                        + byte] &= !player_bit;
+                    self.apply_player(buffer_2, round, table, player);
+                    return Some(false);
+                }
+            }
+            return None; // Could not place any player but fixed_player_count < table_size
         }
         Some(true)
     }

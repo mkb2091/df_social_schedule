@@ -52,7 +52,6 @@ fn main() {
     let mut last_print = std::time::Instant::now();
 
     let mut recent_depth_stats = (0, usize::MAX);
-
     loop {
         {
             let target_size = (current_depth + 2) * SCHEDULER.get_block_size();
@@ -69,6 +68,8 @@ fn main() {
                     //current_depth -= 1;
                     return;
                 } else {
+                    assert_ne!(buf_1, buf_2);
+                    assert!(current_depth <= SCHEDULER.get_players_placed(buf_2));
                     current_depth += 1;
                 }
             } else {
