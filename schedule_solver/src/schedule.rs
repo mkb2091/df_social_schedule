@@ -438,7 +438,7 @@ impl<'a> Schedule<'a> {
         let mut fixed_player_count = 0;
         let mut byte = 0;
         while byte < self.player_bit_word_count {
-            fixed_player_count = buffer[self.offsets.played_on_table_offset
+            fixed_player_count += buffer[self.offsets.played_on_table_offset
                 + self.player_bit_word_count
                     * (round.as_usize() * self.tables.len() + table.as_usize())
                 + byte]
@@ -446,6 +446,42 @@ impl<'a> Schedule<'a> {
             byte += 1;
         }
         fixed_player_count
+    }
+
+    const fn get_potential_count(&self, buffer: &mut [usize], round: Round, table: Table) -> u32 {
+        let mut potential_player_count = 0;
+        let mut byte = 0;
+        while byte < self.player_bit_word_count {
+            potential_player_count += buffer[self.offsets.potential_on_table_offset
+                + self.player_bit_word_count
+                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                + byte]
+                .count_ones();
+            byte += 1;
+        }
+        potential_player_count
+    }
+
+    fn can_place_player_on_table(
+        &self,
+        buffer: &mut [usize],
+        round: Round,
+        table: Table,
+        player: usize,
+    ) -> bool {
+        for other_byte in 0..self.player_bit_word_count {
+            if buffer
+                [self.offsets.played_with_offset + self.player_bit_word_count * player + other_byte]
+                & buffer[self.offsets.played_on_table_offset
+                    + self.player_bit_word_count
+                        * (round.as_usize() * self.tables.len() + table.as_usize())
+                    + other_byte]
+                != 0
+            {
+                return false;
+            }
+        }
+        true
     }
 
     pub fn step(&self, buffer_1: &mut [usize], buffer_2: &mut [usize]) -> Option<bool> {
@@ -471,21 +507,50 @@ impl<'a> Schedule<'a> {
             } else {
                 continue;
             };
-            let table_size = self.tables[table.as_usize()];
+            let table_size = self.tables[table.as_usize()] as u32;
 
             let fixed_player_count = self.get_fixed_count(buffer_1, round, table);
 
-            match fixed_player_count.cmp(&(table_size as u32)) {
+            match fixed_player_count.cmp(&table_size) {
                 core::cmp::Ordering::Less => {
-                    lowest = Some(if let Some(lowest) = lowest {
-                        if fixed_player_count < lowest.0 {
-                            (fixed_player_count, round, table)
-                        } else {
-                            lowest
+                    if self.get_potential_count(buffer_1, round, table) == table_size {
+                        let potential_index = self.offsets.potential_on_table_offset
+                            + self.player_bit_word_count
+                                * (round.as_usize() * self.tables.len() + table.as_usize());
+                        let fixed_index = self.offsets.played_on_table_offset
+                            + self.player_bit_word_count
+                                * (round.as_usize() * self.tables.len() + table.as_usize());
+                        for byte in 0..self.player_bit_word_count {
+                            loop {
+                                let potential = buffer_1[potential_index + byte]
+                                    & !buffer_1[fixed_index + byte];
+                                if potential != 0 {
+                                    let trailing_zeros = potential.trailing_zeros() as usize;
+                                    let player = byte * Self::word_size() + trailing_zeros;
+                                    let player_bit = 1 << trailing_zeros;
+                                    if self
+                                        .can_place_player_on_table(buffer_1, round, table, player)
+                                    {
+                                        self.apply_player(buffer_1, round, table, player);
+                                    } else {
+                                        buffer_1[potential_index + byte] &= !player_bit;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            }
                         }
                     } else {
-                        (fixed_player_count, round, table)
-                    });
+                        lowest = Some(if let Some(lowest) = lowest {
+                            if fixed_player_count < lowest.0 {
+                                (fixed_player_count, round, table)
+                            } else {
+                                lowest
+                            }
+                        } else {
+                            (fixed_player_count, round, table)
+                        });
+                    }
                 }
                 core::cmp::Ordering::Equal => {
                     let pos = self.offsets.to_explore_offset + i * 2;
@@ -529,24 +594,13 @@ impl<'a> Schedule<'a> {
                     let player = byte * Self::word_size() + trailing_zeros;
                     let player_bit = 1 << trailing_zeros;
                     temp &= !player_bit;
-
-                    for other_byte in 0..self.player_bit_word_count {
-                        if buffer_1[self.offsets.played_with_offset
-                            + self.player_bit_word_count * player
-                            + other_byte]
-                            & buffer_1[self.offsets.played_on_table_offset
-                                + self.player_bit_word_count
-                                    * (round.as_usize() * self.tables.len() + table.as_usize())
-                                + other_byte]
-                            != 0
-                        {
-                            // If player has already played with any of the players then remove the player from the potential
-                            buffer_1[offset
-                                + self.player_bit_word_count
-                                    * (round.as_usize() * self.tables.len() + table.as_usize())
-                                + byte] &= !player_bit;
-                            continue 'played_iter;
-                        }
+                    if !self.can_place_player_on_table(buffer_1, round, table, player) {
+                        // If player has already played with any of the players then remove the player from the potential
+                        buffer_1[offset
+                            + self.player_bit_word_count
+                                * (round.as_usize() * self.tables.len() + table.as_usize())
+                            + byte] &= !player_bit;
+                        continue 'played_iter;
                     }
 
                     //buffer_2.copy_from_slice(buffer_1);

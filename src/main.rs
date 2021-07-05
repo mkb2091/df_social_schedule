@@ -84,7 +84,7 @@ fn main() {
             let empty_tables =
                 SCHEDULER.get_empty_table_count(&buf[current_depth * SCHEDULER.get_block_size()..]);
             let mut should_print = false;
-            if players_placed > highest_players_placed {
+            if players_placed >= highest_players_placed {
                 highest_players_placed = players_placed;
                 should_print = true;
             }
