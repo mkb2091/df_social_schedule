@@ -120,7 +120,7 @@ fn main() {
                 check_counter = 0;
                 if last_print.elapsed().as_millis() > 400 {
                     println!(
-                    "Current depth {} (recent max {} min {}) (best players_placed {} lowest empty_tables {}) with rate {}/s",
+                    "Current depth {} (recent min {} max {}) (best players_placed {} lowest empty_tables {}) with rate {}/s",
                     current_depth,
 					recent_depth_stats.1,
 					recent_depth_stats.0,
