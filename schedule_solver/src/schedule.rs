@@ -357,10 +357,11 @@ impl<'a> Schedule<'a> {
         buffer[self.offsets.empty_table_count_offset]
     }
 
-    pub fn find_hidden_singles(&self, buffer: &mut [usize]) {
+    pub const fn find_hidden_singles(&self, buffer: &mut [usize]) {
         let mut round_range = self.round_range;
         while let Some(round) = round_range.next() {
-            for byte in 0..self.player_bit_word_count {
+            let mut byte = 0;
+            while byte < self.player_bit_word_count {
                 let mut potential_in_row = !buffer[self.offsets.played_in_round_offset
                     + self.player_bit_word_count * round.as_usize()
                     + byte];
@@ -394,12 +395,14 @@ impl<'a> Schedule<'a> {
                         self.apply_player(buffer, round, table, player);
                     }
                 }
+                byte += 1;
             }
         }
 
         let mut table_range = self.table_range;
         while let Some(table) = table_range.next() {
-            for byte in 0..self.player_bit_word_count {
+            let mut byte = 0;
+            while byte < self.player_bit_word_count {
                 let mut potential_in_column = !buffer[self.offsets.played_on_table_total_offset
                     + self.player_bit_word_count * table.as_usize()
                     + byte];
@@ -433,6 +436,7 @@ impl<'a> Schedule<'a> {
                         self.apply_player(buffer, round, table, player);
                     }
                 }
+                byte += 1;
             }
         }
     }
@@ -465,24 +469,25 @@ impl<'a> Schedule<'a> {
         potential_player_count
     }
 
-    fn can_place_player_on_table(
+    const fn can_place_player_on_table(
         &self,
         buffer: &mut [usize],
         round: Round,
         table: Table,
         player: usize,
     ) -> bool {
-        for other_byte in 0..self.player_bit_word_count {
-            if buffer
-                [self.offsets.played_with_offset + self.player_bit_word_count * player + other_byte]
+        let mut byte = 0;
+        while byte < self.player_bit_word_count {
+            if buffer[self.offsets.played_with_offset + self.player_bit_word_count * player + byte]
                 & buffer[self.offsets.played_on_table_offset
                     + self.player_bit_word_count
                         * (round.as_usize() * self.tables.len() + table.as_usize())
-                    + other_byte]
+                    + byte]
                 != 0
             {
                 return false;
             }
+            byte += 1;
         }
         true
     }
