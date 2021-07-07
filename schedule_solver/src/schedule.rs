@@ -16,6 +16,7 @@ struct Offsets {
     players_placed_counter_offset: usize,
     empty_table_count_offset: usize,
     to_explore_offset: usize,
+    to_explore_size: usize,
     played_with_offset: usize,
     played_on_table_total_offset: usize,
     played_in_round_offset: usize,
@@ -46,6 +47,7 @@ impl Offsets {
             players_placed_counter_offset,
             empty_table_count_offset,
             to_explore_offset,
+            to_explore_size,
             played_with_offset,
             played_on_table_total_offset,
             played_in_round_offset,
@@ -81,12 +83,13 @@ impl<'a> Schedule<'a> {
         }
         let player_bit_word_count =
             player_count / Self::word_size() + (player_count % Self::word_size() != 0) as usize;
-
         let played_with_size = player_bit_word_count * player_count;
         let played_on_table_total_size = player_bit_word_count * tables.len();
         let played_in_round_size = player_bit_word_count * rounds;
         let played_on_table_size = player_bit_word_count * tables.len() * rounds;
-        let to_explore_size = rounds * tables.len() * 2;
+        let mut to_explore_size = rounds * tables.len() * 2;
+        to_explore_size = to_explore_size / Self::word_size()
+            + (to_explore_size % Self::word_size() != 0) as usize;
         let offsets = Offsets::new(
             to_explore_size,
             played_with_size,
@@ -219,10 +222,10 @@ impl<'a> Schedule<'a> {
         while let Some(round) = round_range.next() {
             let mut table_range = self.table_range;
             while let Some(table) = table_range.next() {
-                let offset = self.offsets.to_explore_offset
-                    + ((round.as_usize() - 1) * self.tables.len() + table.as_usize()) * 2;
-                buffer[offset] = round.as_usize();
-                buffer[offset + 1] = table.as_usize();
+                let number = round.as_usize() * self.tables.len() + table.as_usize();
+                let byte = number / Self::word_size();
+                let mask = 1 << (number - (byte * Self::word_size()));
+                buffer[self.offsets.to_explore_offset] |= mask;
             }
         }
 
@@ -491,90 +494,90 @@ impl<'a> Schedule<'a> {
         self.find_hidden_singles(buffer_1);
         let offset = self.offsets.potential_on_table_offset;
 
-        let mut i = 0;
-
         let mut lowest: Option<(u32, Round, Table)> = None;
-
-        while i < buffer_1[self.offsets.empty_table_count_offset] {
-            let round = buffer_1[self.offsets.to_explore_offset + i * 2];
-            let table = buffer_1[self.offsets.to_explore_offset + i * 2 + 1];
-            let (round, table) = if let Some(table) = self.table_range.convert_usize(table) {
-                if let Some(round) = self.round_range.convert_usize(round) {
-                    (round, table)
+        for to_explore_byte in 0..self.offsets.to_explore_size {
+            let mut to_explore = buffer_1[self.offsets.to_explore_offset + to_explore_byte];
+            while to_explore != 0 {
+                let trailing_zeros = to_explore.trailing_zeros();
+                let number = to_explore_byte * Self::word_size() + trailing_zeros as usize;
+                to_explore &= !(1 << trailing_zeros);
+                let (round, table) = if let Some(val) = self
+                    .round_range
+                    .convert_usize(number / self.tables.len())
+                    .zip(self.table_range.convert_usize(number % self.tables.len()))
+                {
+                    val
                 } else {
+                    buffer_1[self.offsets.to_explore_offset + to_explore_byte] &=
+                        !(1 << trailing_zeros);
+                    // If round or table is out of bounds, then remove
                     continue;
-                }
-            } else {
-                continue;
-            };
-            let table_size = self.tables[table.as_usize()] as u32;
+                };
+                let table_size = self.tables[table.as_usize()] as u32;
 
-            let fixed_player_count = self.get_fixed_count(buffer_1, round, table);
+                let fixed_player_count = self.get_fixed_count(buffer_1, round, table);
 
-            match fixed_player_count.cmp(&table_size) {
-                core::cmp::Ordering::Less => {
-                    if self.get_potential_count(buffer_1, round, table) == table_size {
-                        let potential_index = self.offsets.potential_on_table_offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize());
-                        let fixed_index = self.offsets.played_on_table_offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize());
-                        for byte in 0..self.player_bit_word_count {
-                            loop {
-                                let potential = buffer_1[potential_index + byte]
-                                    & !buffer_1[fixed_index + byte];
-                                if potential != 0 {
-                                    let trailing_zeros = potential.trailing_zeros() as usize;
-                                    let player = byte * Self::word_size() + trailing_zeros;
-                                    let player_bit = 1 << trailing_zeros;
-                                    if self
-                                        .can_place_player_on_table(buffer_1, round, table, player)
-                                    {
-                                        self.apply_player(buffer_1, round, table, player);
+                match fixed_player_count.cmp(&table_size) {
+                    core::cmp::Ordering::Less => {
+                        if self.get_potential_count(buffer_1, round, table) == table_size {
+                            let potential_index = self.offsets.potential_on_table_offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize());
+                            let fixed_index = self.offsets.played_on_table_offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize());
+                            for byte in 0..self.player_bit_word_count {
+                                loop {
+                                    let potential = buffer_1[potential_index + byte]
+                                        & !buffer_1[fixed_index + byte];
+                                    if potential != 0 {
+                                        let trailing_zeros = potential.trailing_zeros() as usize;
+                                        let player = byte * Self::word_size() + trailing_zeros;
+                                        let player_bit = 1 << trailing_zeros;
+                                        if self.can_place_player_on_table(
+                                            buffer_1, round, table, player,
+                                        ) {
+                                            self.apply_player(buffer_1, round, table, player);
+                                        } else {
+                                            buffer_1[potential_index + byte] &= !player_bit;
+                                        }
                                     } else {
-                                        buffer_1[potential_index + byte] &= !player_bit;
+                                        break;
                                     }
-                                } else {
-                                    break;
                                 }
                             }
-                        }
-                    } else {
-                        lowest = Some(if let Some(lowest) = lowest {
-                            if fixed_player_count < lowest.0 {
-                                (fixed_player_count, round, table)
-                            } else {
-                                lowest
-                            }
                         } else {
-                            (fixed_player_count, round, table)
-                        });
+                            lowest = Some(if let Some(lowest) = lowest {
+                                if fixed_player_count < lowest.0 {
+                                    (fixed_player_count, round, table)
+                                } else {
+                                    lowest
+                                }
+                            } else {
+                                (fixed_player_count, round, table)
+                            });
+                        }
                     }
-                }
-                core::cmp::Ordering::Equal => {
-                    let pos = self.offsets.to_explore_offset + i * 2;
-                    let end = self.offsets.to_explore_offset
-                        + buffer_1[self.offsets.empty_table_count_offset] * 2;
-                    //buffer_1[pos..end].rotate_left(2);
-                    buffer_1.swap(pos, end - 2);
-                    buffer_1.swap(pos + 1, end - 1);
-                    buffer_1[self.offsets.empty_table_count_offset] -= 1;
-                    for byte in 0..self.player_bit_word_count {
-                        // Set potential to fixed players
-                        buffer_1[self.offsets.potential_on_table_offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize())
-                            + byte] = buffer_1[self.offsets.played_on_table_offset
-                            + self.player_bit_word_count
-                                * (round.as_usize() * self.tables.len() + table.as_usize())
-                            + byte]
+                    core::cmp::Ordering::Equal => {
+                        buffer_1[self.offsets.to_explore_offset + to_explore_byte] &=
+                            !(1 << trailing_zeros);
+
+                        buffer_1[self.offsets.empty_table_count_offset] -= 1;
+                        for byte in 0..self.player_bit_word_count {
+                            // Set potential to fixed players
+                            buffer_1[self.offsets.potential_on_table_offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                                + byte] = buffer_1[self.offsets.played_on_table_offset
+                                + self.player_bit_word_count
+                                    * (round.as_usize() * self.tables.len() + table.as_usize())
+                                + byte]
+                        }
+                        continue;
                     }
-                    continue;
+                    core::cmp::Ordering::Greater => return None,
                 }
-                core::cmp::Ordering::Greater => return None,
             }
-            i += 1;
         }
 
         if let Some((_, round, table)) = lowest {
