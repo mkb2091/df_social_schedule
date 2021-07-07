@@ -369,7 +369,7 @@ impl<'a> Schedule<'a> {
                     let player = byte * Self::word_size() + trailing_zeros;
                     let player_bit = 1 << trailing_zeros;
                     potential_in_row &= !player_bit;
-                    if player > self.player_count {
+                    if player >= self.player_count {
                         break;
                     }
                     let mut only_position = None;
@@ -408,7 +408,7 @@ impl<'a> Schedule<'a> {
                     let player = byte * Self::word_size() + trailing_zeros;
                     let player_bit = 1 << trailing_zeros;
                     potential_in_column &= !player_bit;
-                    if player > self.player_count {
+                    if player >= self.player_count {
                         break;
                     }
                     let mut only_position = None;
