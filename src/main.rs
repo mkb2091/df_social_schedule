@@ -43,7 +43,7 @@ fn main() {
 
     let mut current_depth = 0;
 
-    let mut total_step_count = 0;
+    let mut total_step_count: usize = 0;
     let mut highest_players_placed = 0;
     let mut lowest_empty_tables = usize::MAX;
     let mut check_frequency = 1;
@@ -121,13 +121,14 @@ fn main() {
                 check_counter = 0;
                 if last_print.elapsed().as_millis() > 400 {
                     println!(
-                    "Current depth {} (recent min {} max {}) (best players_placed {} lowest empty_tables {}) with rate {}/s",
+                    "Current depth {} (recent min {} max {}) (best players_placed {} lowest empty_tables {}) with rate {}/s {} total",
                     current_depth,
 					recent_depth_stats.1,
 					recent_depth_stats.0,
                     highest_players_placed,
 					lowest_empty_tables,
-                    i as f64 / last_print.elapsed().as_secs_f64()
+                    i as f64 / last_print.elapsed().as_secs_f64(),
+					total_step_count
                 );
 
                     recent_depth_stats = (0, usize::MAX);
