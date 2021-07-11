@@ -25,10 +25,10 @@ pub fn print_schedule(schedule: &[usize], groups: &[std::num::NonZeroUsize]) -> 
 }
 
 fn main() {
-    const GROUPS: [usize; 6] = [4; 6];
+    const GROUPS: &[usize] = &[4; 6];
 
     const SCHEDULER: schedule_solver::Schedule =
-        schedule_solver::Schedule::new(&GROUPS, GROUPS.len());
+        schedule_solver::Schedule::new(GROUPS, GROUPS.len());
     const BUF: [usize; SCHEDULER.get_block_size()] = {
         let mut buf = [0; SCHEDULER.get_block_size()];
         if !SCHEDULER.initialise_buffer(&mut buf) {
